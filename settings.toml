@@ -1,7 +1,7 @@
 # Change the name of this file to .env after updating it!
 
 ############
-# [required] 
+# [required]
 # n8n credentials - you set this to whatever you want, just make it a long and secure string for both!
 ############
 
@@ -10,7 +10,7 @@ N8N_USER_MANAGEMENT_JWT_SECRET=even-more-secret
 
 
 ############
-# [required] 
+# [required]
 # Supabase Secrets
 
 # YOU MUST CHANGE THESE BEFORE GOING INTO PRODUCTION
@@ -29,12 +29,12 @@ DASHBOARD_PASSWORD=this_password_is_insecure_and_should_be_updated
 POOLER_TENANT_ID=your-tenant-id
 
 ############
-# [required] 
+# [required]
 # Langfuse credentials
 # Each of the secret keys you can set to whatever you want, just make it secure!
 # For the encryption key, use the command `openssl rand -hex 32`
 #   openssl is available by default on Linux/Mac
-#   For Windows, you can use the 'Git Bash' terminal installed with git 
+#   For Windows, you can use the 'Git Bash' terminal installed with git
 ############
 
 CLICKHOUSE_PASSWORD=super-secret-key-1
@@ -44,7 +44,7 @@ NEXTAUTH_SECRET=super-secret-key-4
 ENCRYPTION_KEY=generate-with-openssl # generate via `openssl rand -hex 32`
 
 ############
-# [required for prod] 
+# [required for prod]
 # Caddy Config
 
 # By default listen on https://localhost:[service port] and don't use an email for SSL

@@ -1,0 +1,12 @@
+[project]
+name = "local-ai-packaged"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "dynaconf>=3.2.11",
+    "invoke>=2.2.0",
+    "loguru>=0.7.3",
+    "pyjwt>=2.10.1",
+    "pytest>=8.3.5",
+    "tomlkit>=0.13.2",
+]
