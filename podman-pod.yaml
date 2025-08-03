@@ -1,0 +1,338 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: local-ai-stack
+  labels:
+    app: local-ai-stack
+spec:
+  restartPolicy: Always
+  containers:
+  # Flowise - AI workflow automation
+  - name: flowise
+    image: flowiseai/flowise:latest
+    ports:
+    - containerPort: 3001
+      hostPort: 3001
+    env:
+    - name: PORT
+      value: "3001"
+    - name: FLOWISE_USERNAME
+      value: "${FLOWISE_USERNAME}"
+    - name: FLOWISE_PASSWORD
+      value: "${FLOWISE_PASSWORD}"
+    command: ["/bin/sh", "-c", "sleep 3; flowise start"]
+    volumeMounts:
+    - name: flowise-data
+      mountPath: /root/.flowise
+
+  # Open WebUI - Chat interface
+  - name: open-webui
+    image: ghcr.io/open-webui/open-webui:main
+    ports:
+    - containerPort: 8080
+      hostPort: 3000
+    volumeMounts:
+    - name: open-webui-data
+      mountPath: /app/backend/data
+
+  # n8n - Workflow automation
+  - name: n8n
+    image: n8nio/n8n:latest
+    ports:
+    - containerPort: 5678
+      hostPort: 5678
+    env:
+    - name: DB_TYPE
+      value: "postgresdb"
+    - name: DB_POSTGRESDB_HOST
+      value: "localhost"
+    - name: DB_POSTGRESDB_USER
+      value: "postgres"
+    - name: DB_POSTGRESDB_PASSWORD
+      value: "${POSTGRES_PASSWORD}"
+    - name: DB_POSTGRESDB_DATABASE
+      value: "postgres"
+    - name: N8N_DIAGNOSTICS_ENABLED
+      value: "false"
+    - name: N8N_PERSONALIZATION_ENABLED
+      value: "false"
+    - name: N8N_ENCRYPTION_KEY
+      value: "${N8N_ENCRYPTION_KEY}"
+    - name: N8N_USER_MANAGEMENT_JWT_SECRET
+      value: "${N8N_USER_MANAGEMENT_JWT_SECRET}"
+    - name: WEBHOOK_URL
+      value: "${N8N_HOSTNAME:+https://}${N8N_HOSTNAME:-http://localhost:5678}"
+    volumeMounts:
+    - name: n8n-data
+      mountPath: /home/node/.n8n
+    - name: n8n-backup
+      mountPath: /backup
+    - name: shared-data
+      mountPath: /data/shared
+
+  # Qdrant - Vector database
+  - name: qdrant
+    image: qdrant/qdrant:latest
+    ports:
+    - containerPort: 6333
+      hostPort: 6333
+    volumeMounts:
+    - name: qdrant-data
+      mountPath: /qdrant/storage
+
+  # PostgreSQL - Database
+  - name: postgres
+    image: postgres:latest
+    ports:
+    - containerPort: 5432
+      hostPort: 5433
+    env:
+    - name: POSTGRES_USER
+      value: "postgres"
+    - name: POSTGRES_PASSWORD
+      value: "${POSTGRES_PASSWORD}"
+    - name: POSTGRES_DB
+      value: "postgres"
+    volumeMounts:
+    - name: postgres-data
+      mountPath: /var/lib/postgresql/data
+    readinessProbe:
+      exec:
+        command: ["pg_isready", "-U", "postgres"]
+      initialDelaySeconds: 5
+      periodSeconds: 3
+
+  # Redis/Valkey - Cache
+  - name: redis
+    image: docker.io/valkey/valkey:8-alpine
+    command: ["valkey-server", "--save", "30", "1", "--loglevel", "warning"]
+    volumeMounts:
+    - name: valkey-data
+      mountPath: /data
+    readinessProbe:
+      exec:
+        command: ["redis-cli", "ping"]
+      initialDelaySeconds: 5
+      periodSeconds: 3
+
+  # ClickHouse - Analytics database
+  - name: clickhouse
+    image: clickhouse/clickhouse-server:latest
+    ports:
+    - containerPort: 8123
+      hostPort: 8123
+    - containerPort: 9000
+      hostPort: 9000
+    env:
+    - name: CLICKHOUSE_DB
+      value: "default"
+    - name: CLICKHOUSE_USER
+      value: "clickhouse"
+    - name: CLICKHOUSE_PASSWORD
+      value: "${CLICKHOUSE_PASSWORD}"
+    volumeMounts:
+    - name: clickhouse-data
+      mountPath: /var/lib/clickhouse
+    - name: clickhouse-logs
+      mountPath: /var/log/clickhouse-server
+    readinessProbe:
+      httpGet:
+        path: /ping
+        port: 8123
+      initialDelaySeconds: 5
+      periodSeconds: 5
+
+  # MinIO - Object storage
+  - name: minio
+    image: minio/minio:latest
+    ports:
+    - containerPort: 9000
+      hostPort: 9090
+    - containerPort: 9001
+      hostPort: 9091
+    env:
+    - name: MINIO_ROOT_USER
+      value: "minio"
+    - name: MINIO_ROOT_PASSWORD
+      value: "${MINIO_ROOT_PASSWORD}"
+    command: ["sh", "-c", "mkdir -p /data/langfuse && minio server --address :9000 --console-address :9001 /data"]
+    volumeMounts:
+    - name: minio-data
+      mountPath: /data
+
+  # Langfuse Web - LLM observability
+  - name: langfuse-web
+    image: langfuse/langfuse:3
+    ports:
+    - containerPort: 3000
+      hostPort: 3002
+    env:
+    - name: DATABASE_URL
+      value: "postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5432/postgres"
+    - name: SALT
+      value: "${LANGFUSE_SALT}"
+    - name: ENCRYPTION_KEY
+      value: "${ENCRYPTION_KEY}"
+    - name: NEXTAUTH_URL
+      value: "http://localhost:3002"
+    - name: NEXTAUTH_SECRET
+      value: "${NEXTAUTH_SECRET}"
+    - name: TELEMETRY_ENABLED
+      value: "${TELEMETRY_ENABLED:-true}"
+    - name: LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES
+      value: "${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-true}"
+    - name: CLICKHOUSE_MIGRATION_URL
+      value: "${CLICKHOUSE_MIGRATION_URL:-clickhouse://localhost:9000}"
+    - name: CLICKHOUSE_URL
+      value: "${CLICKHOUSE_URL:-http://localhost:8123}"
+    - name: CLICKHOUSE_USER
+      value: "${CLICKHOUSE_USER:-clickhouse}"
+    - name: CLICKHOUSE_PASSWORD
+      value: "${CLICKHOUSE_PASSWORD}"
+    - name: REDIS_HOST
+      value: "localhost"
+    - name: REDIS_PORT
+      value: "6379"
+    - name: REDIS_AUTH
+      value: "${REDIS_AUTH:-LOCALONLYREDIS}"
+
+  # Langfuse Worker - Background processing
+  - name: langfuse-worker
+    image: langfuse/langfuse-worker:3
+    ports:
+    - containerPort: 3030
+      hostPort: 3030
+    env:
+    - name: DATABASE_URL
+      value: "postgresql://postgres:${POSTGRES_PASSWORD}@localhost:5432/postgres"
+    - name: SALT
+      value: "${LANGFUSE_SALT}"
+    - name: ENCRYPTION_KEY
+      value: "${ENCRYPTION_KEY}"
+    - name: TELEMETRY_ENABLED
+      value: "${TELEMETRY_ENABLED:-true}"
+    - name: LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES
+      value: "${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-true}"
+    - name: CLICKHOUSE_MIGRATION_URL
+      value: "${CLICKHOUSE_MIGRATION_URL:-clickhouse://localhost:9000}"
+    - name: CLICKHOUSE_URL
+      value: "${CLICKHOUSE_URL:-http://localhost:8123}"
+    - name: CLICKHOUSE_USER
+      value: "${CLICKHOUSE_USER:-clickhouse}"
+    - name: CLICKHOUSE_PASSWORD
+      value: "${CLICKHOUSE_PASSWORD}"
+    - name: REDIS_HOST
+      value: "localhost"
+    - name: REDIS_PORT
+      value: "6379"
+    - name: REDIS_AUTH
+      value: "${REDIS_AUTH:-LOCALONLYREDIS}"
+
+  # SearXNG - Search engine
+  - name: searxng
+    image: docker.io/searxng/searxng:latest
+    ports:
+    - containerPort: 8080
+      hostPort: 8080
+    env:
+    - name: SEARXNG_BASE_URL
+      value: "https://${SEARXNG_HOSTNAME:-localhost}/"
+    - name: UWSGI_WORKERS
+      value: "${SEARXNG_UWSGI_WORKERS:-4}"
+    - name: UWSGI_THREADS
+      value: "${SEARXNG_UWSGI_THREADS:-4}"
+    volumeMounts:
+    - name: searxng-config
+      mountPath: /etc/searxng
+
+  # Ollama - LLM inference (CPU version)
+  - name: ollama
+    image: ollama/ollama:latest
+    ports:
+    - containerPort: 11434
+      hostPort: 11434
+    env:
+    - name: OLLAMA_CONTEXT_LENGTH
+      value: "8192"
+    volumeMounts:
+    - name: ollama-data
+      mountPath: /root/.ollama
+
+  # Traefik - Reverse proxy (replacing Caddy for better pod compatibility)
+  - name: traefik
+    image: traefik:v3.0
+    ports:
+    - containerPort: 80
+      hostPort: 8001
+    - containerPort: 443
+      hostPort: 8443
+    - containerPort: 8080
+      hostPort: 8090
+    command:
+    - --api.insecure=true
+    - --providers.file.filename=/etc/traefik/dynamic.yml
+    - --providers.file.watch=true
+    - --entrypoints.web.address=:80
+    - --entrypoints.websecure.address=:443
+    - --entrypoints.api.address=:8080
+    volumeMounts:
+    - name: traefik-config
+      mountPath: /etc/traefik
+
+  volumes:
+  - name: flowise-data
+    hostPath:
+      path: /home/gryom/Projects/local-ai-packaged/volumes/flowise
+      type: DirectoryOrCreate
+  - name: open-webui-data
+    hostPath:
+      path: /home/gryom/Projects/local-ai-packaged/volumes/open-webui
+      type: DirectoryOrCreate
+  - name: n8n-data
+    hostPath:
+      path: /home/gryom/Projects/local-ai-packaged/volumes/n8n
+      type: DirectoryOrCreate
+  - name: n8n-backup
+    hostPath:
+      path: /home/gryom/Projects/local-ai-packaged/n8n/backup
+      type: DirectoryOrCreate
+  - name: shared-data
+    hostPath:
+      path: /home/gryom/Projects/local-ai-packaged/shared
+      type: DirectoryOrCreate
+  - name: qdrant-data
+    hostPath:
+      path: /home/gryom/Projects/local-ai-packaged/volumes/qdrant
+      type: DirectoryOrCreate
+  - name: postgres-data
+    hostPath:
+      path: /home/gryom/Projects/local-ai-packaged/volumes/postgres
+      type: DirectoryOrCreate
+  - name: valkey-data
+    hostPath:
+      path: /home/gryom/Projects/local-ai-packaged/volumes/valkey
+      type: DirectoryOrCreate
+  - name: clickhouse-data
+    hostPath:
+      path: /home/gryom/Projects/local-ai-packaged/volumes/clickhouse
+      type: DirectoryOrCreate
+  - name: clickhouse-logs
+    hostPath:
+      path: /home/gryom/Projects/local-ai-packaged/volumes/clickhouse-logs
+      type: DirectoryOrCreate
+  - name: minio-data
+    hostPath:
+      path: /home/gryom/Projects/local-ai-packaged/volumes/minio
+      type: DirectoryOrCreate
+  - name: searxng-config
+    hostPath:
+      path: /home/gryom/Projects/local-ai-packaged/searxng
+      type: DirectoryOrCreate
+  - name: ollama-data
+    hostPath:
+      path: /home/gryom/Projects/local-ai-packaged/volumes/ollama
+      type: DirectoryOrCreate
+  - name: traefik-config
+    hostPath:
+      path: /home/gryom/Projects/local-ai-packaged/traefik
+      type: DirectoryOrCreate

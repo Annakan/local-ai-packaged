@@ -1,0 +1,107 @@
+http:
+  routers:
+    # n8n workflow automation
+    n8n:
+      rule: "Host(`${N8N_HOSTNAME:-localhost}`) || PathPrefix(`/n8n`)"
+      service: n8n
+      entryPoints:
+        - web
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+    # Open WebUI chat interface
+    webui:
+      rule: "Host(`${WEBUI_HOSTNAME:-localhost}`) || PathPrefix(`/webui`)"
+      service: webui
+      entryPoints:
+        - web
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+    # Flowise AI workflow
+    flowise:
+      rule: "Host(`${FLOWISE_HOSTNAME:-localhost}`) || PathPrefix(`/flowise`)"
+      service: flowise
+      entryPoints:
+        - web
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+    # Ollama LLM inference
+    ollama:
+      rule: "Host(`${OLLAMA_HOSTNAME:-localhost}`) || PathPrefix(`/ollama`)"
+      service: ollama
+      entryPoints:
+        - web
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+    # SearXNG search engine
+    searxng:
+      rule: "Host(`${SEARXNG_HOSTNAME:-localhost}`) || PathPrefix(`/searxng`)"
+      service: searxng
+      entryPoints:
+        - web
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+    # Langfuse observability
+    langfuse:
+      rule: "Host(`${LANGFUSE_HOSTNAME:-localhost}`) || PathPrefix(`/langfuse`)"
+      service: langfuse
+      entryPoints:
+        - web
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+    # Qdrant vector database (API access)
+    qdrant:
+      rule: "Host(`${QDRANT_HOSTNAME:-localhost}`) || PathPrefix(`/qdrant`)"
+      service: qdrant
+      entryPoints:
+        - web
+        - websecure
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    n8n:
+      loadBalancer:
+        servers:
+          - url: "http://localhost:5678"
+
+    webui:
+      loadBalancer:
+        servers:
+          - url: "http://localhost:3000"
+
+    flowise:
+      loadBalancer:
+        servers:
+          - url: "http://localhost:3001"
+
+    ollama:
+      loadBalancer:
+        servers:
+          - url: "http://localhost:11434"
+
+    searxng:
+      loadBalancer:
+        servers:
+          - url: "http://localhost:8080"
+
+    langfuse:
+      loadBalancer:
+        servers:
+          - url: "http://localhost:3002"
+
+    qdrant:
+      loadBalancer:
+        servers:
+          - url: "http://localhost:6333"
